@@ -1,0 +1,4 @@
+[
+{mysql, {"tmpmail", "tmpmail", "devvm", 3306, "tmpmail"}},
+{tcpserver, {8025, 10}}
+].

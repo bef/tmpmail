@@ -1,0 +1,2 @@
+-record(session, {mode=cmd, data="", from="", to=[]}).
+-define(RE_EMAIL_ADDR, "([a-z0-9._-]+@[a-z0-9][a-z0-9._-]*[a-z0-9])\\.?").
