@@ -1,0 +1,21 @@
+## apache configuration for tmpmail
+
+ScriptAlias /cgi-bin/tmpmail /opt/tmpmail/cgi-bin
+
+Alias /tmpmail /opt/tmpmail/htdocs
+
+<DirectoryMatch "^(/opt/tmpmail/htdocs|/opt/tmpmail/cgi-bin)">
+	Options FollowSymLinks
+
+	DirectoryIndex index.html
+
+	AllowOverride AuthConfig
+	#Order Allow,Deny
+	#Allow From 10.0.0.0/24
+
+	#AuthName "tmpmail access"
+	#AuthType Basic
+	#AuthUserFile /.../htpasswd.users
+	#Require valid-user
+</DirectoryMatch>
+

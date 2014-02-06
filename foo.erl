@@ -8,7 +8,7 @@
 %%
 
 -mode(compile).
--include("foo.hrl").
+-include("include/foo.hrl").
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 %% --- TCP SERVER ---
@@ -36,12 +36,16 @@ tcp_server(LS) ->
 	io:format("~p: new tcp server on socket ~p~n", [self(), LS]),
 	case gen_tcp:accept(LS) of
 		{ok, S} ->
-			io:format("~p/~p: new connection~n", [self(), S]),
+			PeerStr = case inet:peername(S) of
+				{ok, {PeerAddr, _PeerPort}} -> string:join([integer_to_list(X) || X <- tuple_to_list(PeerAddr)],".");
+				_ -> "?"
+			end,
+			io:format("~p/~p: new connection from ~p~n", [self(), S, PeerStr]),
 			
 			smtp_reply(S, "220", "Service Ready"),
 			%% 554 service not ready.
 			
-			tcp_loop(S),
+			tcp_loop(S, #session{remote=PeerStr}),
 			tcp_server(LS);
 		Other ->
 			io:format("~p: accept is gone: ~p~n", [self(), Other]),
@@ -49,8 +53,8 @@ tcp_server(LS) ->
 	end.
 
 
-tcp_loop(S) ->
-	tcp_loop(S, #session{}).
+% tcp_loop(S) ->
+	% tcp_loop(S, #session{}).
 
 tcp_loop(S, State) ->
 	
@@ -191,7 +195,7 @@ handle_end_of_data(S, State) ->
 	smtp_reply(S, "250", "OK"),
 	% io:format("~p~n", [State#session.data]),
 	
-	try store_data(State#session.from, State#session.to, State#session.data) of
+	try store_data(State) of
 		ok ->
 			smtp_reply(S, "250", "OK")
 	catch
@@ -216,7 +220,7 @@ init_storage({mysql, {User, Pass, Host, Port, Db}}) ->
 	
 	ok = emysql:add_pool(tm_pool, 1, User, Pass, Host, Port, Db, utf8),
 
-	emysql:prepare(insmsg_stmt, <<"INSERT INTO msgs (frm, rcpt, data_id, valid_until) VALUES (?, ?, ?, ADDDATE(CURRENT_TIMESTAMP, INTERVAL 1 DAY))">>),
+	emysql:prepare(insmsg_stmt, <<"INSERT INTO msgs (frm, rcpt, data_id, valid_until, remote) VALUES (?, ?, ?, ADDDATE(CURRENT_TIMESTAMP, INTERVAL 7 DAY), ?)">>),
 	emysql:prepare(insdata_stmt, <<"INSERT INTO data (data) VALUES (?)">>),
 
 	ok.
@@ -224,29 +228,30 @@ init_storage({mysql, {User, Pass, Host, Port, Db}}) ->
 shutdown_storage() ->
 	ok.
 
-store_data(From, Rcpts, Data) ->
-	Result = emysql:execute(tm_pool, insdata_stmt, [Data]),
+
+store_data(State) ->
+	Result = emysql:execute(tm_pool, insdata_stmt, [State#session.data]),
 	LastID = emysql_util:insert_id(Result),
-	store_msg(From, Rcpts, LastID).
+	store_msg(State, State#session.to, LastID).
 
 store_msg(_, [], _) -> ok;
-store_msg(From, [Rcpt|Rcpts], LastID) ->
-	emysql:execute(tm_pool, insmsg_stmt, [From, Rcpt, LastID]),
-	store_msg(From, Rcpts, LastID).
+store_msg(State, [Rcpt|Rcpts], LastID) ->
+	emysql:execute(tm_pool, insmsg_stmt, [State#session.from, Rcpt, LastID, State#session.remote]),
+	store_msg(State, Rcpts, LastID).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 main(_) ->
+	io:format("~s~n", ["tmpmail. anonymous smtp server. me@0xml.de."]),
+	
 	%% log errors to console
 	error_logger:tty(true),
 	
-    SN = escript:script_name(),
-    BaseDir = filename:dirname(SN),
-    code:add_patha(filename:join([BaseDir, "Emysql", "ebin"])),
+	SN = escript:script_name(),
+	BaseDir = filename:dirname(SN),
+	code:add_patha(filename:join([BaseDir, "Emysql", "ebin"])),
 	
-	{ok, Config} = file:script(filename:join([BaseDir, "foo.cfg"])),
-	% io:format("~p~n", [lists:keyfind(mysql, 1, Config)]),
-	% halt(1),
+	{ok, Config} = file:script(filename:join([BaseDir, "etc", "foo.cfg"])),
 	
 	%% storage-start
 	init_storage(lists:keyfind(mysql, 1, Config)),
