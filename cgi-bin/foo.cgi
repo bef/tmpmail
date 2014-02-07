@@ -51,7 +51,7 @@ proc show_message {id} {
 		puts ":("
 		return
 	}
-	set stmt "SELECT frm, rcpt, ts, valid_until, remote, data FROM msgs JOIN data ON msgs.data_id = data.id WHERE msgs.id = $id LIMIT 1"
+	set stmt "SELECT frm, rcpt, msgs.ts AS ts, valid_until, remote, data FROM msgs JOIN data ON msgs.data_id = data.id WHERE msgs.id = $id LIMIT 1"
 	set result [::mysql::sel $::dbh $stmt -list]
 	if {[llength $result] < 1} {
 		puts "not found."
