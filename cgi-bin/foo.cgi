@@ -51,19 +51,22 @@ proc show_message {id} {
 		puts ":("
 		return
 	}
-	set stmt "SELECT frm, rcpt, msgs.ts AS ts, valid_until, remote, data FROM msgs JOIN data ON msgs.data_id = data.id WHERE msgs.id = $id LIMIT 1"
+	set stmt "SELECT helo, frm, rcpt, msgs.ts AS ts, valid_until, remote, data FROM msgs JOIN data ON msgs.data_id = data.id WHERE msgs.id = $id LIMIT 1"
 	set result [::mysql::sel $::dbh $stmt -list]
 	if {[llength $result] < 1} {
 		puts "not found."
 		return
 	}
-	lassign [lindex $result 0] frm rcpt ts valid_until remote data
+	lassign [lindex $result 0] helo frm rcpt ts valid_until remote data
 	puts [subst {
+		<div class="well">
+		HELO: [he $helo]<br/>
 		MAIL FROM: [he $frm]<br/>
 		RCPT TO: [he $rcpt]<br/>
 		Timestamp: [he $ts]<br/>
 		Valid until: [he $valid_until]<br/>
 		Received from: [he $remote]<br/>
+		</div>
 		<pre>[he $data]</pre>
 	}]
 }

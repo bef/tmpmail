@@ -100,14 +100,32 @@ handle_smtp(S, #session{mode=data}=State, Data) ->
 reset_session(State) ->
 	State#session{from="", to=[], data=""}.
 
+helo_reply_250(S, "HELO") ->
+	smtp_reply(S, "250", "localhost");
+helo_reply_250(S, "EHLO") ->
+	smtp_reply_multiline(S, "250", ["localhost - nice to meet you.", "NOOP", "HELP"]).
 
-handle_cmd(S, State, "HELO", _Data) ->
-	smtp_reply(S, "250", "localhost"),
-	reset_session(State);
+handle_helo(S, State, First, Data) ->
+	case re:run(Data, "^" ++ First ++ "\\s*(.*?)[\r\n]", [{capture, [1], list}, unicode, caseless]) of
+		nomatch ->
+			smtp_reply(S, "501", ":( bad " ++ First),
+			State;
+		{match, [Helo]} ->
+			helo_reply_250(S, First),
+			State2 = reset_session(State),
+			State2#session{helo=Helo}
+	end.
 
-handle_cmd(S, State, "EHLO", _Data) ->
-	smtp_reply_multiline(S, "250", ["localhost - nice to meet you.", "NOOP", "HELP"]),
-	reset_session(State);
+handle_cmd(S, State, "HELO"=First, Data) ->
+	handle_helo(S, State, First, Data);
+
+handle_cmd(S, State, "EHLO"=First, Data) ->
+	handle_helo(S, State, First, Data);
+
+
+handle_cmd(S, State, "MAIL", _Data) when State#session.helo =:= "" ->
+	smtp_reply(S, "503", "hello?"),
+	State;
 
 handle_cmd(S, State, "MAIL", Data) ->
 	%% error code 555
@@ -141,10 +159,6 @@ handle_cmd(S, State, "RCPT", Data) ->
 			State#session{to=[Addr|State#session.to]}
 	end;
 
-handle_cmd(S, State, "RSET", _Data) ->
-	smtp_reply(S, "250", "OK"),
-	reset_session(State);
-
 handle_cmd(S, State, "DATA", _Data) when State#session.from =/= "", State#session.to =/= [] ->
 	smtp_reply(S, "354", "go ahead."),
 	State#session{mode=data};
@@ -159,6 +173,10 @@ handle_cmd(S, State, "VRFY", _Data) ->
 handle_cmd(S, State, "EXPN", _Data) ->
 	smtp_reply(S, "502", "Command not implemented"),
 	State;
+
+handle_cmd(S, State, "RSET", _Data) ->
+	smtp_reply(S, "250", "OK"),
+	reset_session(State);
 
 handle_cmd(S, State, "NOOP", _Data) ->
 	smtp_reply(S, "250", "OK. did nothing."),
@@ -220,7 +238,7 @@ init_storage({mysql, {User, Pass, Host, Port, Db}}) ->
 	
 	ok = emysql:add_pool(tm_pool, 1, User, Pass, Host, Port, Db, utf8),
 
-	emysql:prepare(insmsg_stmt, <<"INSERT INTO msgs (frm, rcpt, data_id, valid_until, remote) VALUES (?, ?, ?, ADDDATE(CURRENT_TIMESTAMP, INTERVAL 7 DAY), ?)">>),
+	emysql:prepare(insmsg_stmt, <<"INSERT INTO msgs (helo, frm, rcpt, data_id, valid_until, remote) VALUES (?, ?, ?, ?, ADDDATE(CURRENT_TIMESTAMP, INTERVAL 7 DAY), ?)">>),
 	emysql:prepare(insdata_stmt, <<"INSERT INTO data (data) VALUES (?)">>),
 
 	ok.
@@ -236,13 +254,13 @@ store_data(State) ->
 
 store_msg(_, [], _) -> ok;
 store_msg(State, [Rcpt|Rcpts], LastID) ->
-	emysql:execute(tm_pool, insmsg_stmt, [State#session.from, Rcpt, LastID, State#session.remote]),
+	emysql:execute(tm_pool, insmsg_stmt, [State#session.helo, State#session.from, Rcpt, LastID, State#session.remote]),
 	store_msg(State, Rcpts, LastID).
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 main(_) ->
-	io:format("~s~n", ["tmpmail. anonymous smtp server. me@0xml.de."]),
+	io:format("~s~n", ["tmpmail. anonymous smtp server. author: fnord@hr.ax23.de"]),
 	
 	%% log errors to console
 	error_logger:tty(true),
