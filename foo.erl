@@ -1,7 +1,7 @@
 #!/usr/bin/env escript
 %%! -smp enable
 %%
-%% -- anonymous tmp-mail server for 0xml.de --
+%% -- anonymous receiving-only tmp-mail server --
 %% [ quick and dirty version ]
 %% (c) BeF - 2014-02-04
 %% all rights reserved. do not distribute.
