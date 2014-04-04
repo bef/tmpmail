@@ -260,7 +260,7 @@ store_msg(State, [Rcpt|Rcpts], LastID) ->
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 main(_) ->
-	io:format("~s~n", ["tmpmail. anonymous smtp server. author: fnord@hr.ax23.de"]),
+	io:format("~s~n", ["tmpmail. anonymous smtp server. author: bef@sektioneins.de"]),
 	
 	%% log errors to console
 	error_logger:tty(true),
